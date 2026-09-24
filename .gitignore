@@ -1,0 +1,14 @@
+.env
+.env.openrouter
+backend/target/
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+.firecrawl/
+*.log
+.idea/
+.vscode/
+frontend/*.tsbuildinfo
+
+.local/

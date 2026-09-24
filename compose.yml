@@ -1,0 +1,46 @@
+name: finance-radar
+services:
+  db:
+    image: finance-radar-db:local
+    build: ./database
+    environment:
+      POSTGRES_DB: finance_radar
+      POSTGRES_USER: radar
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-radar_local_only}
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - radar-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U radar -d finance_radar"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  backend:
+    build: ./backend
+    env_file:
+      - path: "${OPENROUTER_ENV_FILE:-./.env.openrouter}"
+        required: false
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/finance_radar
+      DB_USER: radar
+      DB_PASSWORD: ${DB_PASSWORD:-radar_local_only}
+      RADAR_USER_AGENT: ${RADAR_USER_AGENT:-FinanceRadar/1.0}
+      RADAR_AI_MODEL: ${RADAR_AI_MODEL:-inclusionai/ling-3.0-flash-vl:free}
+      RADAR_RAG_MIN_SIMILARITY: ${RADAR_RAG_MIN_SIMILARITY:-0.3}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+    restart: unless-stopped
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:5173:80"
+    restart: unless-stopped
+volumes:
+  radar-data:
