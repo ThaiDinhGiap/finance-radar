@@ -56,8 +56,9 @@ export function SourceForm({
     >
       <form className="source-form" onSubmit={submit}>
         <p className="hint">
-          Nguồn mới được lưu ở trạng thái tạm dừng. Kiểm tra điều kiện sử dụng
-          trước khi bật thu thập.
+          {source
+            ? "Cập nhật cấu hình và lịch thu thập của nguồn."
+            : "Nguồn mới được lưu ở trạng thái tạm dừng. Kiểm tra cấu hình trước khi bật thu thập."}
         </p>
         <label>
           Tên nguồn

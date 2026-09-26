@@ -1,0 +1,18 @@
+import { chromium, expect } from '@playwright/test';
+const browser = await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true});
+const page = await browser.newPage({viewport:{width:1440,height:1000}});
+await page.goto('http://127.0.0.1:5173');
+await page.locator('.discovery-filters select').last().selectOption('fpt');
+await page.getByRole('button',{name:"FPT Retail tiếp tục vào 'Top 50 Công ty niêm yết tốt nhất'",exact:true}).waitFor();
+await page.getByLabel('Tên tìm kiếm').fill('FPT kiểm tra local');
+await page.getByRole('button',{name:'Lưu tìm kiếm hiện tại'}).click();
+await page.reload();
+await page.getByRole('button',{name:'FPT kiểm tra local',exact:true}).click();
+await page.locator('.article-row').first().waitFor();
+await page.screenshot({path:'qa/discovery-live-desktop.png',fullPage:true});
+await page.getByRole('button',{name:'Hỏi AI trong phạm vi này'}).click();
+await expect(page.locator('.chat-scope select').nth(1)).toHaveValue('fpt');
+await page.locator('.chat-scope').scrollIntoViewIfNeeded();
+await page.screenshot({path:'qa/discovery-live-chat.png'});
+console.log('Live FPT filter, saved search reload and chat scope transfer passed. No provider call.');
+await browser.close();

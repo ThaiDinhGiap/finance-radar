@@ -1,6 +1,13 @@
 import type { Article } from "../../shared/types";
+export interface ProviderActivity {
+  status: "UNKNOWN" | "HEALTHY" | "DEGRADED" | "STALE";
+  lastSuccessAt: string | null;
+  lastFailureAt: string | null;
+  lastErrorType: string | null;
+}
 export interface ChatStatus {
   configured: boolean;
+  activity?: { embedding: ProviderActivity; generation: ProviderActivity };
   provider: string;
   model: string;
   embeddingModel: string;
@@ -22,11 +29,7 @@ export interface ChatAnswer {
   sources: Article[];
   answeredAt: string;
 }
-export interface ChatScope {
-  sourceId: string;
-  language: string;
-  days: number;
-}
+export type ChatScope = import("../discovery/types").ReadingScope;
 export interface ChatTurn {
   id: string;
   question: string;

@@ -14,6 +14,8 @@ import { dateTime, type Article, type Source } from "../../shared/types";
 import { Modal } from "../../shared/Modal";
 import { useChat } from "./useChat";
 import type { ChatScope, ChatStatus, ChatTurn } from "./types";
+import { useLibrary } from "../discovery/useLibrary";
+import { describeScope, watchScope, type Topic } from "../discovery/types";
 const prompts = [
   "Giá vàng trong các bản tin gần đây có diễn biến gì?",
   "Các báo đang nói gì về lãi suất?",
@@ -22,9 +24,11 @@ const prompts = [
 export function ChatView({
   sources,
   revision,
+  initialScope,
 }: {
   sources: Source[];
   revision: number;
+  initialScope?: ChatScope;
 }) {
   const status = useResource<ChatStatus>("/chat/status", revision, 30000);
   const { turns, busy, send, clear } = useChat();
@@ -34,11 +38,17 @@ export function ChatView({
       transcript.current.scrollTop = transcript.current.scrollHeight;
   }, [turns, busy]);
   const [question, setQuestion] = useState("");
-  const [scope, setScope] = useState<ChatScope>({
-    sourceId: "",
-    language: "",
-    days: 30,
-  });
+  const library = useLibrary();
+  const topics = useResource<Topic[]>("/topics", revision);
+  const [scope, setScope] = useState<ChatScope>(
+    initialScope
+      ? { ...initialScope, days: initialScope.days || 3650 }
+      : {
+          sourceId: "",
+          language: "",
+          days: 30,
+        },
+  );
   const [selected, setSelected] = useState<Article | null>(null);
   const eligibleSources = sources.filter(
     (s) => s.category === "NEWS" || s.category === "INSTITUTION",
@@ -58,8 +68,8 @@ export function ChatView({
     <>
       <div className="section-heading">
         <div>
-          <span className="eyebrow">PHÒNG ĐỌC THÔNG MINH</span>
-          <h1>Đọc sâu hơn cùng AI.</h1>
+          <span className="eyebrow">NGHIÊN CỨU CÓ DẪN CHỨNG</span>
+          <h1>AI đọc tin</h1>
           <p>
             Đặt câu hỏi, đối chiếu dẫn chứng và mở bài gốc ngay trong cuộc trò
             chuyện.
@@ -68,7 +78,13 @@ export function ChatView({
         <span
           className={`badge ${status.data?.configured ? "success" : "pending"}`}
         >
-          {status.data?.configured ? "Đã cấu hình AI" : "Chưa cấu hình AI"}
+          {status.loading
+            ? "Đang kiểm tra cấu hình…"
+            : status.error
+              ? "Không thể kiểm tra AI"
+              : status.data?.configured
+                ? "Đã cấu hình AI"
+                : "Chưa cấu hình AI"}
         </span>
       </div>
       {status.error && (
@@ -83,7 +99,7 @@ export function ChatView({
               <MessageSquare size={18} /> Trợ lý đọc tin
             </span>
             <button
-              className="text-button"
+              className="link-button"
               disabled={busy || !turns.length}
               onClick={clear}
             >
@@ -92,7 +108,7 @@ export function ChatView({
           </div>
           {!status.loading && status.data && !status.data.configured && (
             <div className="chat-setup" role="status">
-              <strong>Chưa có kết nối OpenRouter</strong>
+              <strong>Chưa cấu hình OpenRouter</strong>
               <p>
                 Để lập chỉ mục vector, tìm kiếm ngữ nghĩa và hỏi AI, cấu hình
                 API key trên máy chủ rồi chờ hệ thống lập chỉ mục.
@@ -106,7 +122,7 @@ export function ChatView({
                   <code>OPENROUTER_ENV_FILE</code> trong cấu hình project, sau
                   đó chạy <code>docker compose up -d backend</code>. Khóa
                   OpenRouter không nhập vào trình duyệt và không dùng chung với
-                  khóa quản trị.
+                  bất kỳ dữ liệu phía trình duyệt nào.
                 </p>
               </details>
             </div>
@@ -129,7 +145,13 @@ export function ChatView({
                 </p>
                 <div className="chat-prompts">
                   {prompts.map((prompt) => (
-                    <button key={prompt} onClick={() => setQuestion(prompt)}>
+                    <button
+                      key={prompt}
+                      onClick={() => {
+                        setQuestion(prompt);
+                        document.getElementById("chat-question")?.focus();
+                      }}
+                    >
                       {prompt}
                       <ArrowUpRight size={15} />
                     </button>
@@ -151,7 +173,19 @@ export function ChatView({
               </div>
             )}
           </div>
+          {!status.loading &&
+            status.data?.configured &&
+            !status.data.index.ready && (
+              <div className="chat-setup" role="status">
+                <strong>Kho tin chưa sẵn sàng</strong>
+                <p>
+                  Hệ thống đang chuẩn bị dữ liệu. Bạn có thể soạn câu hỏi và gửi
+                  khi có bài được lập chỉ mục.
+                </p>
+              </div>
+            )}
           <form className="chat-composer" onSubmit={submit}>
+            <p className="hint">Phạm vi: {describeScope(scope)}</p>
             <label className="sr-only" htmlFor="chat-question">
               Câu hỏi về kho tin
             </label>
@@ -224,8 +258,149 @@ export function ChatView({
               {status.data?.index.failed ?? 0} bài lỗi, sẽ thử lại
             </p>
           </div>
+          <div className="chat-context-note" aria-label="Tình trạng dịch vụ AI">
+            <strong>Hoạt động AI</strong>
+            <p className="muted">
+              Theo các lần gọi từ khi máy chủ khởi động; cấu hình không xác nhận
+              kết nối.
+            </p>
+            {(["embedding", "generation"] as const).map((operation) => {
+              const activity = status.data?.activity?.[operation];
+              const state = activity?.status ?? "UNKNOWN";
+              const labels = {
+                UNKNOWN: "Chưa có lần gọi",
+                HEALTHY: "Lần gọi gần nhất thành công",
+                DEGRADED: "Lần gọi gần nhất có lỗi",
+                STALE: "Chưa có dữ liệu mới trong 15 phút",
+              };
+              return (
+                <div key={operation}>
+                  <p>
+                    <strong>
+                      {operation === "embedding"
+                        ? "Embedding"
+                        : "Tạo câu trả lời"}
+                    </strong>
+                  </p>
+                  <p
+                    className={`badge ${state === "HEALTHY" ? "success" : state === "DEGRADED" ? "danger" : "pending"}`}
+                  >
+                    {labels[state]}
+                  </p>
+                  {activity?.lastSuccessAt && (
+                    <p>Thành công: {dateTime(activity.lastSuccessAt)}</p>
+                  )}
+                  {activity?.lastFailureAt && (
+                    <p>
+                      Lỗi: {dateTime(activity.lastFailureAt)} ·{" "}
+                      {activity.lastErrorType}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
           <div className="chat-scope">
             <h3>Phạm vi câu hỏi tiếp theo</h3>
+            <p className="hint">{describeScope(scope)}</p>
+            {library.error && <p role="alert">{library.error}</p>}
+            {topics.error && <p role="alert">{topics.error}</p>}
+            <label>
+              Mở phạm vi đã lưu
+              <select
+                disabled={busy}
+                value=""
+                onChange={(e) => {
+                  const saved = library.searches.find(
+                    (s) => `search:${s.id}` === e.target.value,
+                  );
+                  const watch = library.watches.find(
+                    (w) => `watch:${w.id}` === e.target.value,
+                  );
+                  const next =
+                    saved?.scope ?? (watch ? watchScope(watch) : undefined);
+                  if (next) setScope({ ...next, days: next.days || 3650 });
+                }}
+              >
+                <option value="">Chọn Saved Search / Watchlist</option>
+                {library.searches.map((s) => (
+                  <option key={s.id} value={`search:${s.id}`}>
+                    Tìm kiếm: {s.name}
+                  </option>
+                ))}
+                {library.watches.map((w) => (
+                  <option key={w.id} value={`watch:${w.id}`}>
+                    Watchlist: {w.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Topic / Entity
+              <select
+                disabled={busy}
+                value={
+                  scope.filter?.topicIds?.length === 1
+                    ? scope.filter.topicIds[0]
+                    : ""
+                }
+                onChange={(e) =>
+                  setScope({
+                    ...scope,
+                    filter: {
+                      ...scope.filter,
+                      topicIds: e.target.value ? [e.target.value] : [],
+                    },
+                  })
+                }
+              >
+                <option value="">
+                  {(scope.filter?.topicIds?.length ?? 0) > 1
+                    ? "Nhiều mục trong Watchlist"
+                    : "Tất cả chủ đề"}
+                </option>
+                {topics.data?.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Từ khóa giới hạn
+              <input
+                disabled={busy}
+                maxLength={200}
+                value={scope.filter?.q ?? ""}
+                onChange={(e) =>
+                  setScope({
+                    ...scope,
+                    filter: { ...scope.filter, q: e.target.value },
+                  })
+                }
+              />
+            </label>
+            <label>
+              Địa danh trong tin
+              <input
+                disabled={busy}
+                maxLength={100}
+                value={scope.filter?.location ?? ""}
+                onChange={(e) =>
+                  setScope({
+                    ...scope,
+                    filter: { ...scope.filter, location: e.target.value },
+                  })
+                }
+              />
+            </label>
+            <button
+              className="link-button"
+              disabled={busy}
+              onClick={() => setScope({ sourceId: "", language: "", days: 30 })}
+            >
+              Xóa phạm vi, về 30 ngày
+            </button>
             <label>
               Nguồn
               <select
@@ -334,12 +509,7 @@ function ChatTurnView({
       <div className="chat-user-question">
         <span>BẠN</span>
         <p>{turn.question}</p>
-        <small>
-          {turn.scope.language
-            ? turn.scope.language.toUpperCase()
-            : "Mọi ngôn ngữ"}{" "}
-          · {turn.scope.days} ngày{turn.scope.sourceId ? " · Đã lọc nguồn" : ""}
-        </small>
+        <small>{describeScope(turn.scope)}</small>
       </div>
       {turn.error && (
         <div role="alert" className="error-box">

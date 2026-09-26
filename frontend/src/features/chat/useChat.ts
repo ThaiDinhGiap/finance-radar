@@ -18,7 +18,12 @@ export function useChat() {
     setBusy(true);
     const id = crypto.randomUUID();
     const previousQuestions = turns
-      .filter((t) => !t.error && (t.answer || t.retrieval))
+      .filter(
+        (t) =>
+          !t.error &&
+          (t.answer || t.retrieval) &&
+          JSON.stringify(t.scope) === JSON.stringify(scope),
+      )
       .slice(-3)
       .map((t) => t.question);
     setTurns((v) => [...v, { id, question, scope }]);
@@ -28,7 +33,8 @@ export function useChat() {
         previousQuestions,
         sourceId: scope.sourceId || null,
         language: scope.language,
-        days: scope.days,
+        days: scope.days || 3650,
+        filter: { ...scope.filter, days: scope.days || 3650 },
       };
       const result = await request<ChatAnswer | Article[]>(`/chat/${mode}`, {
         method: "POST",

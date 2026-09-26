@@ -1,5 +1,12 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { X } from "lucide-react";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+} from "../components/ui/dialog";
+
 export function Modal({
   title,
   children,
@@ -9,25 +16,31 @@ export function Modal({
   children: ReactNode;
   close: () => void;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const dialog = ref.current!;
-    const opener = document.activeElement;
-    dialog.showModal();
-    return () => {
-      dialog.close();
-      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
-    };
-  }, []);
+  const [opener] = useState(() =>
+    document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null,
+  );
   return (
-    <dialog ref={ref} className="modal" onCancel={close} aria-label={title}>
-      <div className="modal-heading">
-        <h2>{title}</h2>
-        <button className="icon-button" onClick={close} aria-label="Đóng">
-          <X size={20} />
-        </button>
-      </div>
-      {children}
-    </dialog>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) close();
+      }}
+    >
+      <DialogContent
+        className="modal"
+        showCloseButton={false}
+        finalFocus={() => opener}
+      >
+        <div className="modal-heading">
+          <DialogTitle>{title}</DialogTitle>
+          <DialogClose className="icon-button" aria-label="Đóng">
+            <X size={20} />
+          </DialogClose>
+        </div>
+        {children}
+      </DialogContent>
+    </Dialog>
   );
 }

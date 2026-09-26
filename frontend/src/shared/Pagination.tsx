@@ -12,12 +12,15 @@ export function Pagination({
 }) {
   if (!total) return null;
   return (
-    <div className="pagination">
+    <nav className="pagination" aria-label="Phân trang">
       <span>
         {page * size + 1}–{Math.min((page + 1) * size, total)} /{" "}
         {total.toLocaleString("vi-VN")}
       </span>
       <div>
+        <span className="page-position">
+          Trang {page + 1} / {Math.ceil(total / size)}
+        </span>
         <button
           className="icon-button"
           disabled={page === 0}
@@ -35,6 +38,6 @@ export function Pagination({
           <ChevronRight size={18} />
         </button>
       </div>
-    </div>
+    </nav>
   );
 }

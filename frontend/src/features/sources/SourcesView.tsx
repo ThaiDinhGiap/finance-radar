@@ -1,15 +1,40 @@
 import { useState } from "react";
-import { Plus, Play, Pause, Pencil, ArrowUpRight, Radio } from "lucide-react";
+import {
+  Plus,
+  Play,
+  Pause,
+  Pencil,
+  ArrowUpRight,
+  Radio,
+  Search,
+} from "lucide-react";
 import { categories, dateTime, type Source } from "../../shared/types";
 import { request } from "../../shared/api";
+import { LoadingState } from "../../shared/LoadingState";
 import { SourceForm } from "./SourceForm";
 export function SourcesView({
   sources,
   refresh,
+  loading,
+  error: loadError,
 }: {
   sources: Source[];
   refresh: () => void;
+  loading: boolean;
+  error: string;
 }) {
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const visibleSources = sources.filter(
+    (s) =>
+      s.name.toLocaleLowerCase("vi").includes(search.toLocaleLowerCase("vi")) &&
+      (!status ||
+        (status === "enabled"
+          ? s.enabled
+          : status === "paused"
+            ? !s.enabled
+            : s.failures > 0)),
+  );
   const [form, setForm] = useState<Source | "new" | null>(null);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
@@ -70,7 +95,34 @@ export function SourcesView({
           {error}
         </div>
       )}
-      {!sources.length && (
+      <div className="source-toolbar">
+        <div className="search-field">
+          <Search size={18} />
+          <input
+            aria-label="Tìm nguồn dữ liệu"
+            placeholder="Tìm theo tên nguồn…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <select
+          aria-label="Lọc trạng thái nguồn"
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+        >
+          <option value="">Tất cả trạng thái</option>
+          <option value="enabled">Đã bật</option>
+          <option value="paused">Tạm dừng</option>
+          <option value="failed">Có lỗi thu thập</option>
+        </select>
+        <span>
+          {visibleSources.length} / {sources.length} nguồn
+        </span>
+      </div>
+      {loading && !sources.length && (
+        <LoadingState label="Đang tải nguồn dữ liệu…" />
+      )}
+      {!loading && !loadError && !sources.length && (
         <div className="empty-state">
           <Radio size={30} />
           <h3>Bắt đầu từ một nguồn tin.</h3>
@@ -80,8 +132,24 @@ export function SourcesView({
           </p>
         </div>
       )}
+      {!!sources.length && !visibleSources.length && (
+        <div className="empty-state">
+          <Search size={30} />
+          <h3>Không tìm thấy nguồn phù hợp</h3>
+          <p>Thử tên khác hoặc xóa bộ lọc trạng thái.</p>
+          <button
+            className="button secondary"
+            onClick={() => {
+              setSearch("");
+              setStatus("");
+            }}
+          >
+            Xóa bộ lọc
+          </button>
+        </div>
+      )}
       <div className="source-grid">
-        {sources.map((s) => (
+        {visibleSources.map((s) => (
           <article className="source-card" key={s.id}>
             <div className="source-card-top">
               <span className="source-monogram">
@@ -122,16 +190,23 @@ export function SourcesView({
             <div className="source-actions">
               <button
                 className="button secondary compact"
-                disabled={!s.enabled || !!s.activeRunId || busy === s.id}
+                disabled={!s.enabled || !!s.activeRunId || !!busy}
+                title={
+                  !s.enabled
+                    ? "Bật nguồn trước khi thu thập"
+                    : s.activeRunId
+                      ? "Nguồn đang được xử lý"
+                      : "Thu thập ngay"
+                }
                 onClick={() => void action(s, true)}
               >
                 <Play size={14} />
-                Thu thập
+                {busy === s.id ? "Đang xử lý…" : "Thu thập"}
               </button>
               <button
                 className="icon-button"
                 aria-label={`${s.enabled ? "Tạm dừng" : "Bật"} ${s.name}`}
-                disabled={busy === s.id}
+                disabled={!!busy}
                 onClick={() => void action(s, false)}
               >
                 {s.enabled ? <Pause size={17} /> : <Play size={17} />}
@@ -139,7 +214,7 @@ export function SourcesView({
               <button
                 className="icon-button"
                 aria-label={`Sửa ${s.name}`}
-                disabled={!!s.activeRunId}
+                disabled={!!s.activeRunId || !!busy}
                 onClick={() => showForm(s)}
               >
                 <Pencil size={16} />

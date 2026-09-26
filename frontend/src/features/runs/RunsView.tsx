@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useResource } from "../../shared/useResource";
 import { dateTime, type CrawlRun, type Page } from "../../shared/types";
+import { LoadingState } from "../../shared/LoadingState";
 import { Pagination } from "../../shared/Pagination";
 const states: Record<string, string> = {
   QUEUED: "Đang chờ",
@@ -9,10 +10,11 @@ const states: Record<string, string> = {
   FAILED: "Thất bại",
 };
 export function RunsView({ revision }: { revision: number }) {
+  const [retry, setRetry] = useState(0);
   const [page, setPage] = useState(0);
   const { data, error, loading } = useResource<Page<CrawlRun>>(
     `/runs?page=${page}&size=20`,
-    revision,
+    revision + retry,
     5000,
   );
   return (
@@ -27,20 +29,29 @@ export function RunsView({ revision }: { revision: number }) {
       </div>
       {error && (
         <div className="error-box" role="alert">
-          {error}
+          {error}{" "}
+          <button
+            className="link-button"
+            onClick={() => setRetry((v) => v + 1)}
+          >
+            Thử lại
+          </button>
         </div>
       )}
       {loading ? (
-        <div className="empty-state" role="status">
-          Đang tải nhật ký…
-        </div>
-      ) : !data?.items.length ? (
+        <LoadingState label="Đang tải nhật ký…" />
+      ) : !data?.items.length && !error ? (
         <div className="empty-state">
           <h3>Chưa có lượt thu thập</h3>
           <p>Bật một nguồn và chọn Thu thập để bắt đầu.</p>
         </div>
-      ) : (
-        <div className="table-wrap">
+      ) : data?.items.length ? (
+        <div
+          className="table-wrap"
+          role="region"
+          aria-label="Bảng nhật ký, cuộn ngang để xem đầy đủ"
+          tabIndex={0}
+        >
           <table>
             <caption>Lịch sử các lượt thu thập · Mới nhất trước</caption>
             <thead>
@@ -54,7 +65,7 @@ export function RunsView({ revision }: { revision: number }) {
               </tr>
             </thead>
             <tbody>
-              {data.items.map((run) => (
+              {data?.items.map((run) => (
                 <tr key={run.id}>
                   <td>
                     <strong>{run.sourceName}</strong>
@@ -81,8 +92,8 @@ export function RunsView({ revision }: { revision: number }) {
             </tbody>
           </table>
         </div>
-      )}
-      {data && (
+      ) : null}
+      {data && !loading && (
         <Pagination page={page} size={20} total={data.total} change={setPage} />
       )}
     </>
